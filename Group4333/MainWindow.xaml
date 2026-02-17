@@ -52,6 +52,13 @@
 
                 <!-- Места для добавления элементов управления -->
 
+                <Button Content="Инфо" 
+                        Grid.Row="17" 
+                        HorizontalAlignment="Center" 
+                        VerticalAlignment="Center"
+                        Click="AuthorButton_Click"
+                        Width="200" Height="30"/>
+
                 <!---->
 
             </Grid>
