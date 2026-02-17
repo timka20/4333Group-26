@@ -12,5 +12,8 @@
             <TextBlock Text="Имя: Минибаев Тимур" Margin="0,0,0,5"/>
             <TextBlock Text="Возраст: 18 лет" />
         </StackPanel>
+        <TextBlock Text="Вариант 6 || По улице проживания " Margin="303,145,303,272" />
+        <Button Content="Импорт данных" HorizontalAlignment="Left" Margin="239,276,0,0" VerticalAlignment="Top" RenderTransformOrigin="1.409,0.413" Width="108" Click="Button_Click"/>
+        <Button Content="Экспорт в Excel" HorizontalAlignment="Left" Margin="432,276,0,0" VerticalAlignment="Top" Width="104" Click="Button_Click_1"/>
     </Grid>
 </Window>
