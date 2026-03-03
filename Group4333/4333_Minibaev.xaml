@@ -15,5 +15,7 @@
         <TextBlock Text="Вариант 6 || По улице проживания " Margin="303,145,303,272" />
         <Button Content="Импорт данных" HorizontalAlignment="Left" Margin="239,276,0,0" VerticalAlignment="Top" RenderTransformOrigin="1.409,0.413" Width="108" Click="Button_Click"/>
         <Button Content="Экспорт в Excel" HorizontalAlignment="Left" Margin="432,276,0,0" VerticalAlignment="Top" Width="104" Click="Button_Click_1"/>
+        <Button Content="Импорт из JSON" HorizontalAlignment="Left" Margin="239,328,0,0" VerticalAlignment="Top" Width="108" Click="Button_Click_2"/>
+        <Button Content="Экпорт в Word" HorizontalAlignment="Left" Margin="432,328,0,0" VerticalAlignment="Top" Width="104" Click="Button_Click_3"/>
     </Grid>
 </Window>

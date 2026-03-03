@@ -4,10 +4,43 @@ using Group4333.Models;
 using Microsoft.Win32;
 using Excel = Microsoft.Office.Interop.Excel;
 using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic; 
-
+using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.IO;
 namespace Group4333
 {
+
+    public class UserImport
+    {
+        [JsonPropertyName("fio")]
+        public string Fio { get; set; }
+
+        [JsonPropertyName("code_client")]
+        public string CodeClient { get; set; }
+
+        [JsonPropertyName("date_birsday")]
+        public DateTime? DateBirsday { get; set; }
+
+        [JsonPropertyName("index")]
+        public string Index { get; set; }
+
+        [JsonPropertyName("sity")]
+        public string Sity { get; set; }
+
+        [JsonPropertyName("street")]
+        public string Street { get; set; }
+
+        [JsonPropertyName("home")]
+        public string Home { get; set; }
+
+        [JsonPropertyName("kvartira")]
+        public string Kvartira { get; set; }
+
+        [JsonPropertyName("email")]
+        public string Email { get; set; }
+    }
+
     public partial class _4333_Minibaev : Window
     {
         public _4333_Minibaev()
@@ -173,6 +206,212 @@ namespace Group4333
 
                 excelApp.Visible = true;
                 excelApp.UserControl = true;
+            }
+        }
+
+        private void Button_Click_2(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog()
+            {
+                DefaultExt = "*.json",
+                Filter = "JSON файл (*.json)|*.json",
+                Title = "Выберите JSON файл"
+            };
+
+            if (ofd.ShowDialog() != true) return;
+
+            try
+            {
+                string jsonString = File.ReadAllText(ofd.FileName);
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    ReadCommentHandling = JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true
+                };
+
+                var importUsers = JsonSerializer.Deserialize<List<UserImport>>(jsonString, options);
+
+                if (importUsers == null || importUsers.Count == 0)
+                {
+                    MessageBox.Show("Не удалось прочитать данные из JSON.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                var optionsBuilder = new DbContextOptionsBuilder<lab3Context>();
+                string connectionString = "Server=.;Database=lab3;Trusted_Connection=True;TrustServerCertificate=True;";
+                optionsBuilder.UseSqlServer(connectionString);
+
+                using (var db = new lab3Context(optionsBuilder.Options))
+                {
+                    var existingCodes = db.Users.Select(u => u.CodeClient).Where(c => c != null).ToHashSet();
+
+                    int added = 0, skipped = 0, errors = 0;
+
+                    foreach (var u in importUsers)
+                    {
+                        try
+                        {
+                            if (string.IsNullOrWhiteSpace(u.CodeClient))
+                            {
+                                skipped++;
+                                continue;
+                            }
+
+                            if (existingCodes.Contains(u.CodeClient))
+                            {
+                                skipped++;
+                                continue;
+                            }
+
+                            var user = new User
+                            {
+                                Fio = u.Fio,
+                                CodeClient = u.CodeClient,
+                                DateBirsday = u.DateBirsday,
+                                Index = u.Index,
+                                Sity = u.Sity,
+                                Street = u.Street,
+                                Home = u.Home,
+                                Kvartiva = u.Kvartira,
+                                Email = u.Email
+                            };
+
+                            db.Users.Add(user);
+                            existingCodes.Add(u.CodeClient);
+                            added++;
+                        }
+                        catch (Exception ex)
+                        {
+                            errors++;
+                        }
+                    }
+
+                    db.SaveChanges();
+
+                    MessageBox.Show($"Готово!\nДобавлено: {added}\nПропущено: {skipped}\nОшибок: {errors}",
+                                   "Импорт", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+
+        }
+
+        private void Button_Click_3(object sender, RoutedEventArgs e)
+        {
+            var optionsBuilder = new DbContextOptionsBuilder<lab3Context>();
+            string connectionString = "Server=.;Database=lab3;Trusted_Connection=True;TrustServerCertificate=True;";
+            optionsBuilder.UseSqlServer(connectionString);
+
+            dynamic wordApp = null;
+            dynamic doc = null;
+
+            try
+            {
+                using (var db = new lab3Context(optionsBuilder.Options))
+                {
+                    var users = db.Users.ToList();
+                    if (!users.Any())
+                    {
+                        MessageBox.Show("Нет данных для экспорта.");
+                        return;
+                    }
+
+                    var groupedByStreet = users.GroupBy(u => u.Street).OrderBy(g => g.Key).ToList();
+
+                    SaveFileDialog sfd = new SaveFileDialog
+                    {
+                        Filter = "Документ Word (*.docx)|*.docx",
+                        Title = "Сохранить отчет",
+                        FileName = $"Отчет_по_улицам_{DateTime.Now:yyyyMMdd}"
+                    };
+
+                    if (sfd.ShowDialog() != true)
+                        return;
+
+                    Type wordType = Type.GetTypeFromProgID("Word.Application");
+                    if (wordType == null)
+                    {
+                        MessageBox.Show("Microsoft Word не установлен на этом компьютере.");
+                        return;
+                    }
+
+                    wordApp = Activator.CreateInstance(wordType);
+                    wordApp.Visible = false;
+                    doc = wordApp.Documents.Add();
+
+                    dynamic mainTable = doc.Tables.Add(doc.Range(0, 0), groupedByStreet.Count + 1, 2);
+                    mainTable.Borders.Enable = 1;
+
+                    mainTable.Cell(1, 1).Range.Text = "Критерий разделения на категории";
+                    mainTable.Cell(1, 2).Range.Text = "Формат экспортируемых данных";
+                    mainTable.Cell(1, 2).Range.Paragraphs.Alignment = 1;
+                    mainTable.Cell(1, 2).Range.Font.Bold = 1;
+
+                    int rowIndex = 2;
+                    foreach (var streetGroup in groupedByStreet)
+                    {
+                        string streetName = streetGroup.Key ?? "Без улицы";
+                        mainTable.Cell(rowIndex, 1).Range.Text = $"По улице проживания:\n{streetName}";
+
+                        var sortedUsers = streetGroup.OrderBy(u => u.Fio).ToList();
+
+                        dynamic subTable = doc.Tables.Add(mainTable.Cell(rowIndex, 2).Range, sortedUsers.Count + 1, 3);
+                        subTable.Borders.Enable = 1;
+
+     
+                        subTable.Cell(1, 1).Range.Text = "Код клиента";
+                        subTable.Cell(1, 2).Range.Text = "ФИО";
+                        subTable.Cell(1, 3).Range.Text = "E-mail";
+
+                        for (int col = 1; col <= 3; col++)
+                        {
+                            subTable.Cell(1, col).Range.Font.Bold = 1;
+                            subTable.Cell(1, col).Range.Paragraphs.Alignment = 1;
+                        }
+
+                        int dataRow = 2;
+                        foreach (var user in sortedUsers)
+                        {
+                            subTable.Cell(dataRow, 1).Range.Text = user.CodeClient ?? "";
+                            subTable.Cell(dataRow, 2).Range.Text = user.Fio ?? "";
+                            subTable.Cell(dataRow, 3).Range.Text = user.Email ?? "";
+                            dataRow++;
+                        }
+
+                        subTable.AutoFitBehavior(1);
+                        rowIndex++;
+                    }
+
+                    doc.SaveAs2(sfd.FileName);
+                    doc.Close();
+                    wordApp.Quit();
+
+                    MessageBox.Show($"Файл сохранен:\n{sfd.FileName}", "Экспорт завершен",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка:\n{ex.Message}\n\nWord должен быть установлен.", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                if (doc != null)
+                {
+                    try { doc.Close(); } catch { }
+                }
+                if (wordApp != null)
+                {
+                    try { wordApp.Quit(); } catch { }
+                }
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
             }
         }
     }
